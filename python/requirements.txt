@@ -3,3 +3,5 @@ pika
 prometheus-client
 requests
 warcio
+lxml_html_clean
+pytest

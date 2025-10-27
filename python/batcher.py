@@ -17,7 +17,13 @@ from rabbitmq import QUEUE_NAME, MessageQueueChannel, RabbitMQChannel
 
 BATCH_SIZE = 50
 
+# Prometheus counters
 batch_counter = Counter("batcher_batches", "Number of published batches")
+total_documents_counter = Counter("batcher_total_documents", "Total documents scanned")
+filtered_by_language_counter = Counter("batcher_filtered_language", "Documents filtered by language")
+filtered_by_status_counter = Counter("batcher_filtered_status", "Documents filtered by status")
+filtered_by_missing_info_counter = Counter("batcher_filtered_missing_info", "Documents filtered by missing language info")
+passed_filters_counter = Counter("batcher_passed_filters", "Documents that passed all filters")
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,18 +63,31 @@ def process_index(
                 continue
             values = line.split(" ")
             metadata = json.loads("".join(values[2:]))
-            if (
-                "languages" in metadata
-                and "eng" in metadata["languages"]
-                and metadata["status"] == "200"
-            ):
-                found_urls.append(
-                    {
-                        "surt_url": values[0],
-                        "timestamp": values[1],
-                        "metadata": metadata,
-                    }
-                )
+            
+            total_documents_counter.inc()
+            
+            # Track filtering at each stage
+            if "languages" not in metadata:
+                filtered_by_missing_info_counter.inc()
+                continue
+            
+            if "eng" not in metadata["languages"]:
+                filtered_by_language_counter.inc()
+                continue
+            
+            if metadata.get("status") != "200":
+                filtered_by_status_counter.inc()
+                continue
+            
+            # Document passed all filters
+            passed_filters_counter.inc()
+            found_urls.append(
+                {
+                    "surt_url": values[0],
+                    "timestamp": values[1],
+                    "metadata": metadata,
+                }
+            )
             if len(found_urls) >= batch_size:
                 publish_batch(channel, found_urls)
                 found_urls = []

@@ -213,7 +213,7 @@ go run ./cmd/batcher -cluster-idx-filename <CLUSTER_IDX_FILENAME>
 This section summarizes some coding challenges that you might want to try to implement.
 
 - Batcher and worker:
-  - Add Prometheus counters that track how many documents we are filtering at every stage. This can be done both in the batcher and in the worker.
+  - ✅ Add Prometheus counters that track how many documents we are filtering at every stage. This can be done both in the batcher and in the worker. (Completed)
 - Worker:
   - Write the extracted and filtered document content to an object store. It should be possible to pass the address of the object store bucket to the worker. If you don't already have an object store bucket lying around, you can spin up a `minio/minio` container for that and pass the object store address to the worker. Which file format would you use to store the entries on the object store?
   - Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.
