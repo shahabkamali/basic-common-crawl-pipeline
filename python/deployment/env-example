@@ -5,6 +5,9 @@ COMMONCRAWL_BASE_URL=https://data.commoncrawl.org
 # RabbitMQ Configuration
 RABBITMQ_CONNECTION_STRING=amqp://guest:guest@localhost:5672/
 
+# Storage Configuration
+STORAGE_TYPE=minio              # Storage backend: minio or s3
+
 # MinIO Configuration
 BUCKET_NAME=extracteddata
 MINIO_ENDPOINT=http://localhost:9002
