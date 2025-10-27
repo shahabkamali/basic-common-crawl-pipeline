@@ -269,7 +269,12 @@ This section summarizes some coding challenges that you might want to try to imp
     - Applies length filters (MIN_TEXT_LENGTH=500, MAX_TEXT_LENGTH=1000000)
     - Tracks uploads with `worker_uploads_to_storage` and `worker_text_length_filtered` counters
     - Configure via: `STORAGE_TYPE=minio` (or `s3` for S3-compatible)
-  - Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.
+  - ~~Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.~~ ✅ **Done**:
+    - Uses **HuggingFace Tokenizers** library for tokenization
+    - Configurable tokenizer model via `TOKENIZER_NAME` env var (default: `bert-base-uncased`)
+    - Configurable max tokens via `MAX_TOKENS` env var (default: `512`)
+    - Documents are tokenized before storage with fields: `tokens`, `attention_mask`, `token_count`, `tokenizer_name`
+    - Gracefully handles missing/unavailable tokenizers
   - (Rust only) Can performance be improved by leveraging the tokio async runtime, maybe even using multiple threads if necessary?
   - ~~Add a filter that makes sure that documents are at least 500 characters long and at most 1,000,000 characters long~~ ✅ **Done**: Configured via `MIN_TEXT_LENGTH` and `MAX_TEXT_LENGTH` env vars (defaults: 500, 1000000)
 - Batcher:

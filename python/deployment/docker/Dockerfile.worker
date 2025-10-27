@@ -19,6 +19,8 @@ COPY python/worker.py .
 COPY python/commoncrawl.py .
 COPY python/rabbitmq.py .
 COPY python/minio_client.py .
+COPY python/storage.py .
+COPY python/tokenizer.py .
 
 # Set default environment variables
 ENV PROMETHEUS_PORT=9001

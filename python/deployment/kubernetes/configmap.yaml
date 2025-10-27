@@ -14,5 +14,6 @@ data:
   MIN_TEXT_LENGTH: "500"
   MAX_TEXT_LENGTH: "1000000"
   TOKENIZER_NAME: "bert-base-uncased"
+  MAX_TOKENS: "512"
   BUCKET_NAME: "extracteddata"
 

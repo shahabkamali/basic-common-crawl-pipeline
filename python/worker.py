@@ -11,6 +11,7 @@ from prometheus_client import Counter
 from commoncrawl import BASE_URL, CCDownloader, Downloader
 from storage import get_storage
 from rabbitmq import QUEUE_NAME, rabbitmq_channel
+from tokenizer import get_tokenizer, DocumentTokenizer
 
 # Configure logging
 logging.basicConfig(
@@ -28,7 +29,7 @@ text_length_filtered = Counter("worker_text_length_filtered", "Text filtered by 
 uploads_to_storage = Counter("worker_uploads_to_storage", "Documents uploaded to storage")
 
 
-def process_batch(downloader: Downloader, storage, ch, method, _properties, body):
+def process_batch(downloader: Downloader, storage, tokenizer, ch, method, _properties, body):
     logger.info("Received batch of size %d", len(body))
     batch = json.loads(body)
     
@@ -62,6 +63,15 @@ def process_batch(downloader: Downloader, storage, ch, method, _properties, body
                             "processed_at": datetime.utcnow().isoformat(),
                             "metadata": item.get("metadata", {})
                         }
+                        
+                        # Tokenize text if tokenizer is available
+                        if tokenizer and tokenizer.is_available():
+                            try:
+                                tokenized_data = tokenizer.tokenize(text)
+                                document.update(tokenized_data)
+                            except Exception as e:
+                                logger.error(f"Error during tokenization: {e}")
+                        
                         documents_to_upload.append(document)
                     else:
                         text_length_filtered.inc()
@@ -97,6 +107,18 @@ def main() -> None:
         logger.warning(f"Could not initialize storage: {e}")
         storage = None
     
+    # Initialize tokenizer
+    try:
+        tokenizer = get_tokenizer()
+        if tokenizer and tokenizer.is_available():
+            logger.info(f"Tokenizer initialized: {tokenizer.tokenizer_name}")
+        else:
+            logger.warning("Tokenizer not available, documents will not be tokenized")
+            tokenizer = None
+    except Exception as e:
+        logger.warning(f"Could not initialize tokenizer: {e}")
+        tokenizer = None
+    
     downloader = CCDownloader(BASE_URL)
     logger.info("Connecting to RabbitMQ queue: %s", QUEUE_NAME)
     channel = rabbitmq_channel()
@@ -104,7 +126,7 @@ def main() -> None:
     channel.basic_consume(
         queue=QUEUE_NAME,
         on_message_callback=lambda ch, method, properties, body: process_batch(
-            downloader, storage, ch, method, properties, body
+            downloader, storage, tokenizer, ch, method, properties, body
         ),
     )
     logger.info("Worker started, waiting for messages...")
