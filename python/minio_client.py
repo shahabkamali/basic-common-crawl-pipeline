@@ -37,13 +37,13 @@ def get_minio_client():
 
 
 def upload_to_minio(client, bucket_name: str, key: str, data: str) -> bool:
-    """Upload data to MinIO bucket"""
+    """Upload data to MinIO bucket as JSONL format"""
     try:
         client.put_object(
             Bucket=bucket_name,
             Key=key,
             Body=data.encode('utf-8'),
-            ContentType='text/plain'
+            ContentType='application/x-ndjson'  # JSON Lines format
         )
         return True
     except Exception as e:

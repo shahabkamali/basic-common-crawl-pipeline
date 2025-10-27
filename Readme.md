@@ -260,11 +260,18 @@ This section summarizes some coding challenges that you might want to try to imp
       - `batcher_batches` - Batches published
     - **Worker** (port 9001): `worker_urls_processed`, `worker_warc_records`, `worker_text_extraction_attempts`, `worker_text_extraction_success`, `worker_batches`
 - Worker:
-  - Write the extracted and filtered document content to an object store. It should be possible to pass the address of the object store bucket to the worker. If you don't already have an object store bucket lying around, you can spin up a `minio/minio` container for that and pass the object store address to the worker. Which file format would you use to store the entries on the object store?
+  - ~~Write the extracted and filtered document content to an object store. It should be possible to pass the address of the object store bucket to the worker. If you don't already have an object store bucket lying around, you can spin up a `minio/minio` container for that and pass the object store address to the worker. Which file format would you use to store the entries on the object store?~~ ✅ **Done**: 
+    - Uses **JSON Lines (JSONL)** format - one JSON object per line for efficient streaming
+    - **Abstract Storage Interface**: Supports MinIO/S3 via `STORAGE_TYPE` env var (default: `minio`)
+    - Automatically creates `extracteddata` bucket in MinIO
+    - Stores documents as: `documents/batch_20240101_120000.jsonl`
+    - Each document includes: url, timestamp, text, text_length, processed_at, metadata
+    - Applies length filters (MIN_TEXT_LENGTH=500, MAX_TEXT_LENGTH=1000000)
+    - Tracks uploads with `worker_uploads_to_storage` and `worker_text_length_filtered` counters
+    - Configure via: `STORAGE_TYPE=minio` (or `s3` for S3-compatible)
   - Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.
-  - Add some metrics so that we know how much data we are currently downloading and how many batches we have already processed and how many documents we have already processed
   - (Rust only) Can performance be improved by leveraging the tokio async runtime, maybe even using multiple threads if necessary?
-  - Add a filter that makes sure that documents are at least 500 characters long and at most 1,000,000 characters long
+  - ~~Add a filter that makes sure that documents are at least 500 characters long and at most 1,000,000 characters long~~ ✅ **Done**: Configured via `MIN_TEXT_LENGTH` and `MAX_TEXT_LENGTH` env vars (defaults: 500, 1000000)
 - Batcher:
   - ~~Make it possible to pass the version of the crawl as an argument. Currently, it is hardcoded to CC-MAIN-2024-30.~~ ✅ **Done**: Pass version using `--version CC-MAIN-2024-30` or set `COMMONCRAWL_VERSION` env var
   - (Rust only) Can we get rid of the `collect` in the batcher that collects the filtered `CdxEntry`s?
