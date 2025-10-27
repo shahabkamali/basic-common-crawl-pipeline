@@ -50,7 +50,7 @@ def process_index(
     found_urls = []
     for cdx_chunk in index:
         data = downloader.download_and_unzip(
-            cdx_chunk[1], int(cdx_chunk[2]), int(cdx_chunk[3])
+            url=cdx_chunk[1], start=int(cdx_chunk[2]), length=int(cdx_chunk[3])
         ).decode("utf-8")
         for line in data.split("\n"):
             if line == "":
