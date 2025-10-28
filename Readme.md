@@ -222,43 +222,8 @@ Run the worker:
 python worker.py
 ```
 
-The worker writes training shards as gzip-compressed JSON Lines, partitioned by day:
+Optional: add tokenization (store token IDs alongside text)
 
-```
-documents/
-  └── YYYYMMDD/
-      ├── shard-<timestamp_ms>-<rand>.jsonl.gz
-      └── ...
-```
-
-Each line is one JSON object: `url`, `timestamp`, `text`, `metadata`, `text_length`.
-
-Load with Hugging Face Datasets:
-
-```python
-from datasets import load_dataset
-ds = load_dataset("json", data_files="documents/**/shard-*.jsonl.gz", split="train", streaming=True)
-```
-
-## Common Crawl Pipeline - Go Implementation
-
-This is the Go implementation of the Common Crawl pipeline. The implementation follows the same structure and functionality as the Python version.
-
-### Prerequisites for go
-
-- Go 1.21 or later
-- RabbitMQ server running locally (or accessible via network)
-- Common Crawl index file
-
-### Running
-
-> Make sure the current directory is `golang` before running the following commands
-
-1. Start the worker:
-
-```bash
-go run ./cmd/worker
-```
 
 2. Start the batcher with an index file:
 
@@ -311,7 +276,7 @@ This section summarizes some coding challenges that you might want to try to imp
   - [x] Add Prometheus counters that track how many documents we are filtering at every stage. This can be done both in the batcher and in the worker.
 - Worker:
   - [x] Write the extracted and filtered document content to an object store. It should be possible to pass the address of the object store bucket to the worker. If you don't already have an object store bucket lying around, you can spin up a `minio/minio` container for that and pass the object store address to the worker. Which file format would you use to store the entries on the object store?
-  - Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.
+  - [x] Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.
   - Add some metrics so that we know how much data we are currently downloading and how many batches we have already processed and how many documents we have already processed
   - (Rust only) Can performance be improved by leveraging the tokio async runtime, maybe even using multiple threads if necessary?
   - [x] Add a filter that makes sure that documents are at least 500 characters long and at most 1,000,000 characters long

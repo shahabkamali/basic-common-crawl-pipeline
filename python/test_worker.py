@@ -30,6 +30,18 @@ class FakeChannel:
         self.acked_delivery_tag = delivery_tag
 
 
+class FakeStorageWriter:
+    def __init__(self):
+        self.written = []
+
+    def write_jsonl_sharded(self, date_prefix: str, obj: dict) -> bool:
+        self.written.append((date_prefix, obj))
+        return True
+
+    def flush_all(self) -> bool:
+        return True
+
+
 def reset_counters():
     """Reset all Prometheus counters for testing"""
     batch_counter._value._value = 0
@@ -60,6 +72,7 @@ def test_prometheus_batch_counter():
     
     channel = FakeChannel()
     downloader = FakeDownloader()
+    storage = FakeStorageWriter()
     
     # Mock successful extraction by providing valid HTML
     html_content = b"""
@@ -73,7 +86,7 @@ def test_prometheus_batch_counter():
     
     # We'll need to create a mock WARCIterator or patch it
     # For simplicity, we'll just test the counter increments
-    process_batch(downloader, channel, method, properties, body.encode())
+    process_batch(downloader, storage, None, channel, method, properties, body.encode())
     
     assert batch_counter._value._value == 1
 
@@ -107,8 +120,9 @@ def test_prometheus_document_counter():
     
     channel = FakeChannel()
     downloader = FakeDownloader()
+    storage = FakeStorageWriter()
     
-    process_batch(downloader, channel, method, properties, body.encode())
+    process_batch(downloader, storage, None, channel, method, properties, body.encode())
     
     assert document_counter._value._value == 3
 
@@ -129,8 +143,9 @@ def test_prometheus_records_processed_counter():
     
     channel = FakeChannel()
     downloader = FakeDownloader()
+    storage = FakeStorageWriter()
     
-    process_batch(downloader, channel, method, properties, body.encode())
+    process_batch(downloader, storage, None, channel, method, properties, body.encode())
     
     # Should have at least processed some records
     assert records_processed_counter._value._value >= 0
@@ -152,8 +167,9 @@ def test_prometheus_extraction_success_counter():
     
     channel = FakeChannel()
     downloader = FakeDownloader()
+    storage = FakeStorageWriter()
     
-    process_batch(downloader, channel, method, properties, body.encode())
+    process_batch(downloader, storage, None, channel, method, properties, body.encode())
     
     # Extraction may succeed or fail depending on mock data
     # We just verify the counter can be accessed
@@ -177,8 +193,9 @@ def test_prometheus_extraction_failed_counter():
     
     channel = FakeChannel()
     downloader = FakeDownloader()
+    storage = FakeStorageWriter()
     
-    process_batch(downloader, channel, method, properties, body.encode())
+    process_batch(downloader, storage, None, channel, method, properties, body.encode())
     
     # Counter should be accessible
     assert extraction_failed_counter._value._value >= 0
@@ -208,8 +225,9 @@ def test_prometheus_counters_integration():
 
     channel = FakeChannel()
     downloader = FakeDownloader()
+    storage = FakeStorageWriter()
 
-    process_batch(downloader, channel, method, properties, body.encode())
+    process_batch(downloader, storage, None, channel, method, properties, body.encode())
 
     # Verify all counters
     assert batch_counter._value._value == 1

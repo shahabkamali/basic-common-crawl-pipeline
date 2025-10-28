@@ -7,3 +7,5 @@ lxml_html_clean
 pytest
 langdetect
 boto3
+tokenizers
+huggingface_hub
