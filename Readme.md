@@ -138,6 +138,34 @@ export RABBITMQ_CONNECTION_STRING=amqp://localhost:<PORT>
 docker run -d --name prometheus -v ./prometheus:/config -p 9090:9090 prom/prometheus --config.file=/config/scrape_configs.yml
 ```
 
+### Install and start MinIO (object storage)
+
+We store extracted, filtered documents as JSONL.gz shards in an S3-compatible bucket.
+
+```bash
+# Start MinIO (API on 9002, Console on 9003)
+docker run -d \
+  --name minio \
+  -p 9002:9000 \
+  -p 9003:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin \
+  minio/minio server /data --console-address ":9001"
+
+# Open MinIO Console at http://localhost:9003 (user: minioadmin / pass: minioadmin)
+```
+
+Environment variables used by the worker (defaults shown):
+
+```bash
+export MINIO_ENDPOINT=http://localhost:9002
+export MINIO_ACCESS_KEY=minioadmin
+export MINIO_SECRET_KEY=minioadmin
+export MINIO_BUCKET=extracted-documents
+```
+
+The worker will create the bucket if it does not exist.
+
 ### Download cluster.idx file and start pipeline
 
 First, we download the Common Crawl index file for one crawl:
@@ -170,6 +198,18 @@ cd python
 pip install -r requirements.txt
 ```
 
+Set environment variables (or add to a `.env`):
+
+```bash
+export RABBITMQ_CONNECTION_STRING=amqp://guest:guest@localhost:5672/
+export MINIO_ENDPOINT=http://localhost:9002
+export MINIO_ACCESS_KEY=minioadmin
+export MINIO_SECRET_KEY=minioadmin
+export MINIO_BUCKET=extracted-documents
+export MIN_DOCUMENT_LENGTH=500
+export MAX_DOCUMENT_LENGTH=1000000
+```
+
 Run the batcher:
 
 ```
@@ -180,6 +220,24 @@ Run the worker:
 
 ```bash
 python worker.py
+```
+
+The worker writes training shards as gzip-compressed JSON Lines, partitioned by day:
+
+```
+documents/
+  └── YYYYMMDD/
+      ├── shard-<timestamp_ms>-<rand>.jsonl.gz
+      └── ...
+```
+
+Each line is one JSON object: `url`, `timestamp`, `text`, `metadata`, `text_length`.
+
+Load with Hugging Face Datasets:
+
+```python
+from datasets import load_dataset
+ds = load_dataset("json", data_files="documents/**/shard-*.jsonl.gz", split="train", streaming=True)
 ```
 
 ## Common Crawl Pipeline - Go Implementation
@@ -208,24 +266,62 @@ go run ./cmd/worker
 go run ./cmd/batcher -cluster-idx-filename <CLUSTER_IDX_FILENAME>
 ```
 
+## Sequence diagram
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User/Operator
+    participant B as Batcher
+    participant CC as Common Crawl
+    participant Q as RabbitMQ
+    participant W as Worker
+    participant S as MinIO (Object Storage)
+    participant P as Prometheus
+
+    U->>B: Start batcher (cluster.idx path)
+    B->>CC: HTTP Range GET (index ranges)
+    CC-->>B: CDX data chunk
+    B->>B: Filter (status=200, language=eng)
+    B->>Q: Publish URL batch (JSON)
+    B->>P: Expose metrics (/metrics)
+
+    loop For each worker instance
+        U->>W: Start worker
+        W->>Q: Consume batch
+        W->>CC: HTTP Range GET (WARC slice)
+        CC-->>W: WARC bytes
+        W->>W: Extract text (trafilatura)
+        W->>W: Filter (length bounds, using LanguageDetection language=en)
+        alt Passed filters
+            W->>S: Append JSONL line to daily shard (gzip)
+        else Filtered out
+            W->>W: Increment filtered counters
+        end
+        W->>P: Expose metrics (/metrics)
+    end
+```
+
 ## Coding challenges
+
 
 This section summarizes some coding challenges that you might want to try to implement.
 
 - Batcher and worker:
-  - ✅ Add Prometheus counters that track how many documents we are filtering at every stage. This can be done both in the batcher and in the worker. (Completed)
+  - [x] Add Prometheus counters that track how many documents we are filtering at every stage. This can be done both in the batcher and in the worker.
 - Worker:
-  - Write the extracted and filtered document content to an object store. It should be possible to pass the address of the object store bucket to the worker. If you don't already have an object store bucket lying around, you can spin up a `minio/minio` container for that and pass the object store address to the worker. Which file format would you use to store the entries on the object store?
+  - [x] Write the extracted and filtered document content to an object store. It should be possible to pass the address of the object store bucket to the worker. If you don't already have an object store bucket lying around, you can spin up a `minio/minio` container for that and pass the object store address to the worker. Which file format would you use to store the entries on the object store?
   - Add tokenization so that we already have tokenized data ready for training on the object store. The Huggingface tokenizers library might be a good starting point.
   - Add some metrics so that we know how much data we are currently downloading and how many batches we have already processed and how many documents we have already processed
   - (Rust only) Can performance be improved by leveraging the tokio async runtime, maybe even using multiple threads if necessary?
-  - Add a filter that makes sure that documents are at least 500 characters long and at most 1,000,000 characters long
+  - [x] Add a filter that makes sure that documents are at least 500 characters long and at most 1,000,000 characters long
 - Batcher:
   - Make it possible to pass the version of the crawl as an argument. Currently, it is hardcoded to CC-MAIN-2024-30.
   - (Rust only) Can we get rid of the `collect` in the batcher that collects the filtered `CdxEntry`s?
   - Put in some error handling when publishing a batch to RabbitMQ. Can we recover from network issues or timeouts?
   - Add some monitoring for the batcher so that we know which percentage of the cluster.idx file has already been processed and so that we know how many batches have already been pushed
   - Allow support for providing multiple crawls that can be processed by the batcher. This feature allows us to collect more data than would be available from a single crawl. But notice that this feature is only useful if we can make sure that we only download the content of every URL only once. Notice that a URL might show up in multiple crawls over time.
+
 
 ## Learning resources if you are new to Rust
 

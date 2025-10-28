@@ -5,3 +5,5 @@ requests
 warcio
 lxml_html_clean
 pytest
+langdetect
+boto3

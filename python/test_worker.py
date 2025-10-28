@@ -7,6 +7,7 @@ from worker import (
     records_processed_counter,
     extraction_success_counter,
     extraction_failed_counter,
+    passes_filters,
 )
 from commoncrawl import Downloader
 
@@ -215,4 +216,35 @@ def test_prometheus_counters_integration():
     assert document_counter._value._value == 2
     assert channel.acked == True
     assert channel.acked_delivery_tag == 1
+
+
+def test_passes_filters_too_short():
+    ok, reason, length = passes_filters("abc", 500, 1000000)
+    assert ok is False
+    assert reason == "too_short"
+    assert length == 3
+
+
+def test_passes_filters_too_long():
+    text = "a" * (1000000 + 1)
+    ok, reason, length = passes_filters(text, 500, 1000000)
+    assert ok is False
+    assert reason == "too_long"
+    assert length == len(text)
+
+
+def test_passes_filters_non_english():
+    text = ("Ich spereche kein Deutsch. " * 50)
+    ok, reason, length = passes_filters(text, 10, 1000000)
+    assert ok is False
+    assert reason in ("non_english", "lang_unknown")
+    assert length == len(text)
+
+
+def test_passes_filters_ok_english():
+    text = ("This is an English sentence with enough length. " * 20)
+    ok, reason, length = passes_filters(text, 100, 1000000)
+    assert ok is True
+    assert reason == "ok"
+    assert length == len(text)
 
